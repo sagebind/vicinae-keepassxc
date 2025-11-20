@@ -21,7 +21,17 @@
         "autofill"
       ],
       "description": "Auto-type a password from KeePassXC into the currently active window.",
-      "mode": "view"
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "keyDelay",
+          "title": "Key Delay",
+          "description": "Delay between key presses (in milliseconds).",
+          "required": false,
+          "type": "textfield",
+          "default": "60"
+        }
+      ]
     }
   ],
   "preferences": [

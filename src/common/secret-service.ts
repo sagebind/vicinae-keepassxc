@@ -1,14 +1,25 @@
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 
 /**
  * Stores a secret in the system"s secret service.
  */
-export async function store(label: string, secret: string, attributes: Record<string, string>) {
-    const attributeArgs = Object.entries(attributes).flatMap(([key, value]) => [key, value]);
+export async function store(
+    label: string,
+    secret: string,
+    attributes: Record<string, string>,
+) {
+    const attributeArgs = Object.entries(attributes).flatMap(([key, value]) => [
+        key,
+        value,
+    ]);
 
-    const child = spawn("secret-tool", ["store", `--label=${label}`, ...attributeArgs], {
-        stdio: ["pipe", "ignore", "inherit"],
-    });
+    const child = spawn(
+        "secret-tool",
+        ["store", `--label=${label}`, ...attributeArgs],
+        {
+            stdio: ["pipe", "ignore", "inherit"],
+        },
+    );
 
     child.stdin.write(secret);
     child.stdin.end();
@@ -22,7 +33,10 @@ export async function store(label: string, secret: string, attributes: Record<st
  * Looks up a secret from the system"s secret service.
  */
 export async function lookup(attributes: Record<string, string>) {
-    const attributeArgs = Object.entries(attributes).flatMap(([key, value]) => [key, value]);
+    const attributeArgs = Object.entries(attributes).flatMap(([key, value]) => [
+        key,
+        value,
+    ]);
 
     const child = spawn("secret-tool", ["lookup", ...attributeArgs], {
         stdio: ["ignore", "pipe", "inherit"],
