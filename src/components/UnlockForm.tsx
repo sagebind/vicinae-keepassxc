@@ -25,9 +25,18 @@ export function UnlockForm({
                 </ActionPanel>
             }
         >
+            <Form.Description
+                key="unlock-description"
+                text="Please enter your database password to unlock the KeePassXC database."
+            />
+            <Form.Description
+                key="unlock-description-2"
+                text="Your password will be stored encrypted in your login keyring."
+            />
             <Form.PasswordField
                 id="password"
-                title="Enter your database password"
+                key="password"
+                title="Password"
             />
         </Form>
     );

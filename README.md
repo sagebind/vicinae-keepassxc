@@ -13,6 +13,7 @@ There is already a KeePassXC extension for Raycast, but it will not run in Vicin
 - Linux-only
 - KeePassXC must be installed.
 - You must have `ydotool` installed, `ydotoold` must be running, and the current user must have permission to the `ydotool` socket. The easiest way to accomplish this is to run `ydotool` as a user service instead of as `root`, and adding yourself to the `input` group.
+- You must have `secret-tool` installed. Until Vicinae moves to an encrypted preferences storage, this extension will store your password in your Secret Service keyring instead to ensure it is remembered securely.
 - Your KDBX database file must be readable from a file system path.
 
 ## License
