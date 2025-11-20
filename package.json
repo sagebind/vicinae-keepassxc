@@ -11,8 +11,8 @@
   "icon": "keepassxc.svg",
   "commands": [
     {
-      "name": "autotype",
-      "title": "Auto-Type",
+      "name": "search",
+      "title": "Search Passwords",
       "subtitle": "KeePassXC",
       "keywords": [
         "keepassxc",
@@ -20,12 +20,12 @@
         "password",
         "autofill"
       ],
-      "description": "Auto-type a password from KeePassXC into the currently active window.",
+      "description": "Search KeePassXC entries.",
       "mode": "view",
       "preferences": [
         {
           "name": "keyDelay",
-          "title": "Key Delay",
+          "title": "Auto-Type Key Delay",
           "description": "Delay between key presses (in milliseconds).",
           "required": false,
           "type": "textfield",
