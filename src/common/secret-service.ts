@@ -1,4 +1,7 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Stores a secret in the system"s secret service.
@@ -38,23 +41,14 @@ export async function lookup(attributes: Record<string, string>) {
         value,
     ]);
 
-    const child = spawn("secret-tool", ["lookup", ...attributeArgs], {
-        stdio: ["ignore", "pipe", "inherit"],
-    });
+    try {
+        const { stdout } = await execFileAsync("secret-tool", [
+            "lookup",
+            ...attributeArgs,
+        ]);
 
-    let secret = "";
-
-    child.stdout.on("data", (data) => {
-        secret += data.toString();
-    });
-
-    const exitCode = await new Promise((resolve, reject) => {
-        child.on("close", resolve);
-    });
-
-    if (exitCode === 0) {
-        return secret;
-    } else {
+        return stdout;
+    } catch (_e) {
         return null;
     }
 }

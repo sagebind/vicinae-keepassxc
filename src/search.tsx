@@ -10,9 +10,12 @@ import {
     openExtensionPreferences,
     showToast,
     Clipboard,
+    Form,
 } from "@vicinae/api";
 import { performAutoType } from "./common/autotype";
 import { getEntryByPath, getEntryNames } from "./common/keepassxc";
+import { getDatabasePassword, storeDatabasePassword } from "./common/password";
+import { UnlockForm } from "./components/UnlockForm";
 
 export default function () {
     const { databasePath, keyDelay } = getPreferenceValues();
@@ -27,14 +30,40 @@ export default function () {
     }
 
     const [isLoading, setIsLoading] = useState(true);
+    const [isUnlocked, setIsUnlocked] = useState(true);
     const [entryNames, setEntryNames] = useState<string[]>([]);
 
     useEffect(() => {
-        getEntryNames(databasePath).then((names) => {
+        (async () => {
+            const password = await getDatabasePassword(databasePath);
+
+            if (!password) {
+                setIsUnlocked(false);
+                return;
+            }
+
+            const names = await getEntryNames({
+                path: databasePath,
+                password,
+            });
+
             setEntryNames(names);
             setIsLoading(false);
-        });
-    }, [databasePath]);
+        })();
+    }, [databasePath, isUnlocked]);
+
+    if (!isUnlocked) {
+        return (
+            <UnlockForm
+                onUnlock={(password) => {
+                    storeDatabasePassword(databasePath, password).then(() => {
+                        setIsUnlocked(true);
+                        setIsLoading(true);
+                    });
+                }}
+            ></UnlockForm>
+        );
+    }
 
     return (
         <List
@@ -42,114 +71,142 @@ export default function () {
             searchBarPlaceholder="Search KeePassXC entries..."
         >
             {entryNames.map((name, idx) => (
-                <List.Item
-                    id={`${idx}:${name}`}
-                    key={`${idx}:${name}`}
-                    title={name.split("/").pop() || name}
-                    subtitle={name.lastIndexOf("/") > 0 ? name.substring(0, name.lastIndexOf("/")) : undefined}
-                    icon={Icon.Key}
-                    actions={
-                        <ActionPanel>
-                            <Action
-                                title="Auto-Type"
-                                icon={Icon.Keyboard}
-                                onAction={() =>
-                                    performAutoType(
-                                        databasePath,
-                                        name,
-                                        parseInt(keyDelay, 10),
-                                    )
-                                }
-                            />
-                            <Action
-                                title="Copy username"
-                                icon={Icon.CopyClipboard}
-                                onAction={() => {
-                                    (async () => {
-                                        const entry = await getEntry(
-                                            databasePath,
-                                            name,
-                                        );
-
-                                        if (entry.UserName) {
-                                            await Clipboard.copy(
-                                                entry.UserName,
-                                            );
-                                        }
-                                    })();
-                                }}
-                            />
-                            <Action
-                                title="Copy password"
-                                icon={Icon.CopyClipboard}
-                                onAction={() => {
-                                    (async () => {
-                                        const entry = await getEntry(
-                                            databasePath,
-                                            name,
-                                        );
-
-                                        if (entry.Password) {
-                                            await Clipboard.copy(
-                                                entry.Password,
-                                                {
-                                                    concealed: true,
-                                                }
-                                            );
-                                        }
-                                    })();
-                                }}
-                            />
-                            <Action
-                                title="Paste username"
-                                icon={Icon.Window}
-                                onAction={() => {
-                                    (async () => {
-                                        const entry = await getEntry(
-                                            databasePath,
-                                            name,
-                                        );
-
-                                        if (entry.UserName) {
-                                            closeMainWindow();
-                                            await setTimeout(5000);
-                                            await Clipboard.paste(
-                                                entry.UserName,
-                                            );
-                                        }
-                                    })();
-                                }}
-                            />
-                            <Action
-                                title="Paste password"
-                                icon={Icon.Key}
-                                onAction={() => {
-                                    (async () => {
-                                        const entry = await getEntry(
-                                            databasePath,
-                                            name,
-                                        );
-
-                                        if (entry.Password) {
-                                            await closeMainWindow();
-                                            await setTimeout(5000);
-                                            await Clipboard.paste(
-                                                entry.Password,
-                                            );
-                                        }
-                                    })();
-                                }}
-                            />
-                        </ActionPanel>
-                    }
+                <ListItem
+                    idx={idx}
+                    name={name}
+                    databasePath={databasePath}
+                    keyDelay={keyDelay}
                 />
             ))}
         </List>
     );
 }
 
-async function getEntry(databasePath: string, entryName: string): Promise<Record<string, string>> {
-    const entry = await getEntryByPath(databasePath, entryName);
+function ListItem({
+    idx,
+    name,
+    databasePath,
+    keyDelay,
+}: {
+    idx: number;
+    name: string;
+    databasePath: string;
+    keyDelay: string;
+}) {
+    return (
+        <List.Item
+            id={`${idx}:${name}`}
+            key={`${idx}:${name}`}
+            title={name.split("/").pop() || name}
+            subtitle={
+                name.lastIndexOf("/") > 0
+                    ? name.substring(0, name.lastIndexOf("/"))
+                    : undefined
+            }
+            icon={Icon.Key}
+            actions={
+                <ActionPanel>
+                    <Action
+                        title="Auto-type"
+                        icon={Icon.Keyboard}
+                        onAction={() =>
+                            performAutoType(
+                                databasePath,
+                                name,
+                                parseInt(keyDelay, 10),
+                            )
+                        }
+                    />
+                    <Action
+                        title="Copy username"
+                        icon={Icon.CopyClipboard}
+                        onAction={() => {
+                            (async () => {
+                                const entry = await getEntry(
+                                    databasePath,
+                                    name,
+                                );
+
+                                if (entry.UserName) {
+                                    await Clipboard.copy(entry.UserName);
+                                }
+                            })();
+                        }}
+                    />
+                    <Action
+                        title="Copy password"
+                        icon={Icon.CopyClipboard}
+                        onAction={() => {
+                            (async () => {
+                                const entry = await getEntry(
+                                    databasePath,
+                                    name,
+                                );
+
+                                if (entry.Password) {
+                                    await Clipboard.copy(entry.Password, {
+                                        concealed: true,
+                                    });
+                                }
+                            })();
+                        }}
+                    />
+                    <Action
+                        title="Paste username"
+                        icon={Icon.Window}
+                        onAction={() => {
+                            (async () => {
+                                const entry = await getEntry(
+                                    databasePath,
+                                    name,
+                                );
+
+                                if (entry.UserName) {
+                                    closeMainWindow();
+                                    await setTimeout(5000);
+                                    await Clipboard.paste(entry.UserName);
+                                }
+                            })();
+                        }}
+                    />
+                    <Action
+                        title="Paste password"
+                        icon={Icon.Key}
+                        onAction={() => {
+                            (async () => {
+                                const entry = await getEntry(
+                                    databasePath,
+                                    name,
+                                );
+
+                                if (entry.Password) {
+                                    await closeMainWindow();
+                                    await setTimeout(5000);
+                                    await Clipboard.paste(entry.Password);
+                                }
+                            })();
+                        }}
+                    />
+                </ActionPanel>
+            }
+        />
+    );
+}
+
+async function getEntry(
+    databasePath: string,
+    entryName: string,
+): Promise<Record<string, string>> {
+    const password = await getDatabasePassword(databasePath);
+
+    if (!password) {
+        throw new Error("Database is locked.");
+    }
+
+    const entry = await getEntryByPath(
+        { path: databasePath, password },
+        entryName,
+    );
     if (!entry) {
         throw new Error(`Entry "${entryName}" not found in database.`);
     }

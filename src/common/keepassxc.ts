@@ -1,32 +1,30 @@
 import { spawn } from "node:child_process";
-import { store, lookup } from "./secret-service";
 
 type Entry = Record<string, string>;
 
-const cliCommand = "flatpak";
-const cliArgs = ["run", "--command=keepassxc-cli", "org.keepassxc.KeePassXC"];
-const secretAttributes = {
-    application: "vicinae-keepassxc",
-    item: "database-password",
+export type DatabaseConfig = {
+    path: string;
+    password: string;
 };
 
+const cliCommand = "flatpak";
+const cliArgs = ["run", "--command=keepassxc-cli", "org.keepassxc.KeePassXC"];
+
 export async function getEntryNames(
-    databasePath: string,
+    database: DatabaseConfig,
     includeTrash: boolean = false,
 ): Promise<string[]> {
-    const password = await getPasswordInteractive(databasePath);
-
     const output = await new Promise((resolve, reject) => {
         const child = spawn(
             cliCommand,
-            [...cliArgs, "ls", "--quiet", "--recursive", databasePath],
+            [...cliArgs, "ls", "--quiet", "--recursive", database.path],
             {
                 stdio: ["pipe", "pipe", "inherit"],
             },
         );
 
         // Send password to CLI to unlock database.
-        child.stdin.write(password);
+        child.stdin.write(database.password);
         child.stdin.end();
 
         let output = "";
@@ -77,11 +75,9 @@ export async function getEntryNames(
 }
 
 export async function getEntryByPath(
-    databasePath: string,
+    database: DatabaseConfig,
     entryPath: string,
 ): Promise<Entry | null> {
-    const password = await getPasswordInteractive(databasePath);
-
     const output = await new Promise((resolve, reject) => {
         const child = spawn(
             cliCommand,
@@ -91,7 +87,7 @@ export async function getEntryByPath(
                 "--quiet",
                 "--all",
                 "--show-protected",
-                databasePath,
+                database.path,
                 entryPath,
             ],
             {
@@ -100,7 +96,7 @@ export async function getEntryByPath(
         );
 
         // Send password to CLI to unlock database.
-        child.stdin.write(password);
+        child.stdin.write(database.password);
         child.stdin.end();
 
         let output = "";
@@ -132,63 +128,4 @@ export async function getEntryByPath(
     }
 
     return entry;
-}
-
-async function getPasswordInteractive(databasePath: string): Promise<string> {
-    let password = await getDatabasePassword(databasePath);
-
-    if (!password) {
-        password = await promptDatabasePassword();
-        if (!password) {
-            throw new Error("No password provided for KeePassXC database.");
-        }
-        await storeDatabasePassword(databasePath, password);
-    }
-
-    return password;
-}
-
-async function getDatabasePassword(
-    databasePath: string,
-): Promise<string | null> {
-    return await lookup({
-        ...secretAttributes,
-        database: databasePath,
-    });
-}
-
-async function storeDatabasePassword(
-    databasePath: string,
-    password: string,
-): Promise<void> {
-    await store(
-        "KeePassXC integration for Vicinae - Database Password",
-        password,
-        {
-            ...secretAttributes,
-            database: databasePath,
-        },
-    );
-}
-
-async function promptDatabasePassword(): Promise<string | null> {
-    return new Promise((resolve, reject) => {
-        const child = spawn("zenity", ["--password"], {
-            stdio: ["ignore", "pipe", "inherit"],
-        });
-
-        let output = "";
-
-        child.stdout.on("data", (data) => {
-            output += data.toString();
-        });
-
-        child.on("close", (code) => {
-            if (code === 0) {
-                resolve(output);
-            } else {
-                reject(new Error(`zenity exited with code ${code}`));
-            }
-        });
-    });
 }
