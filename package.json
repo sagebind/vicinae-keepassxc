@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vicinaehq/vicinae/refs/heads/main/extra/schemas/extension.json",
+  "name": "keepassxc",
+  "title": "KeePassXC",
+  "description": "Global password auto-type from KeePassXC.",
+  "categories": [],
+  "license": "MIT",
+  "author": "sagebind",
+  "contributors": [],
+  "pastContributors": [],
+  "icon": "keepassxc.svg",
+  "commands": [
+    {
+      "name": "autotype",
+      "title": "Auto-Type",
+      "subtitle": "KeePassXC",
+      "keywords": [
+        "keepassxc",
+        "autotype",
+        "password",
+        "autofill"
+      ],
+      "description": "Auto-type a password from KeePassXC into the currently active window.",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "databasePath",
+      "title": "Database Path",
+      "description": "File path to your KeePassXC database file.",
+      "required": true,
+      "type": "file"
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "dev": "vici develop",
+    "format": "biome format --write src",
+    "lint": "vici lint"
+  },
+  "dependencies": {
+    "@vicinae/api": "^0.16.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "@biomejs/biome": "2.3.2"
+  }
+}
