@@ -1,7 +1,7 @@
 import { setTimeout } from "node:timers/promises";
 import { closeMainWindow, showToast } from "@vicinae/api";
 import { type } from "./automation";
-import type { Database } from "./keepassxc";
+import { Database } from "./keepassxc";
 
 export async function performAutoType(
     database: Database,

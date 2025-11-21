@@ -50,7 +50,9 @@
     "lint": "vici lint"
   },
   "dependencies": {
-    "@vicinae/api": "^0.16.5"
+    "@types/which": "^3.0.4",
+    "@vicinae/api": "^0.16.5",
+    "which": "^6.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

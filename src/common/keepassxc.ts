@@ -1,14 +1,7 @@
 import { spawn } from "node:child_process";
+import which from "which";
 
 type Entry = Record<string, string>;
-
-export type DatabaseConfig = {
-    path: string;
-    password: string;
-};
-
-const cliCommand = "flatpak";
-const cliArgs = ["run", "--command=keepassxc-cli", "org.keepassxc.KeePassXC"];
 
 export class Database {
     #path: string;
@@ -20,33 +13,12 @@ export class Database {
     }
 
     async getEntryNames(includeTrash: boolean = false): Promise<string[]> {
-        const output = await new Promise((resolve, reject) => {
-            const child = spawn(
-                cliCommand,
-                [...cliArgs, "ls", "--quiet", "--recursive", this.#path],
-                {
-                    stdio: ["pipe", "pipe", "inherit"],
-                },
-            );
-
-            // Send password to CLI to unlock database.
-            child.stdin.write(this.#password);
-            child.stdin.end();
-
-            let output = "";
-
-            child.stdout.on("data", (data) => {
-                output += data.toString();
-            });
-
-            child.on("close", (code) => {
-                if (code === 0) {
-                    resolve(output);
-                } else {
-                    reject(new Error(`keepassxc-cli exited with code ${code}`));
-                }
-            });
-        });
+        const output = await this.exec(
+            "ls",
+            "--quiet",
+            "--recursive",
+            this.#path,
+        );
 
         const fullNames = [];
         const groupStack: string[] = [];
@@ -81,23 +53,39 @@ export class Database {
     }
 
     async getEntryByPath(entryPath: string): Promise<Entry | null> {
-        const output = await new Promise((resolve, reject) => {
-            const child = spawn(
-                cliCommand,
-                [
-                    ...cliArgs,
-                    "show",
-                    "--quiet",
-                    "--all",
-                    "--show-protected",
-                    this.#path,
-                    entryPath,
-                ],
-                {
-                    stdio: ["pipe", "pipe", "inherit"],
-                },
-            );
+        const output = await this.exec(
+            "show",
+            "--quiet",
+            "--all",
+            "--show-protected",
+            this.#path,
+            entryPath,
+        );
 
+        if (!output) {
+            return null;
+        }
+
+        const entry: Entry = {};
+
+        for (const line of (output as string).split("\n")) {
+            const [, key, value] = /^([^:]+):\s*(.*)$/.exec(line) || [];
+            if (key) {
+                entry[key] = value;
+            }
+        }
+
+        return entry;
+    }
+
+    private async exec(...args: string[]): Promise<string> {
+        const [cliCommand, ...cliArgs] = await getCliCommand();
+
+        const child = spawn(cliCommand, [...cliArgs, ...args], {
+            stdio: ["pipe", "pipe", "inherit"],
+        });
+
+        return await new Promise((resolve, reject) => {
             // Send password to CLI to unlock database.
             child.stdin.write(this.#password);
             child.stdin.end();
@@ -116,20 +104,26 @@ export class Database {
                 }
             });
         });
-
-        if (!output) {
-            return null;
-        }
-
-        const entry: Entry = {};
-
-        for (const line of (output as string).split("\n")) {
-            const [, key, value] = /^([^:]+):\s*(.*)$/.exec(line) || [];
-            if (key) {
-                entry[key] = value;
-            }
-        }
-
-        return entry;
     }
+}
+
+async function getCliCommand(): Promise<string[]> {
+    if (await commandExists("keepassxc-cli")) {
+        return ["keepassxc-cli"];
+    }
+
+    if (await commandExists("flatpak")) {
+        return [
+            "flatpak",
+            "run",
+            "--command=keepassxc-cli",
+            "org.keepassxc.KeePassXC",
+        ];
+    }
+
+    throw new Error("Could not find KeePassXC CLI");
+}
+
+async function commandExists(command: string): Promise<boolean> {
+    return !!(await which(command, { nothrow: true }));
 }
