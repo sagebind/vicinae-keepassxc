@@ -10,10 +10,9 @@ import {
     openExtensionPreferences,
     showToast,
     Clipboard,
-    Form,
 } from "@vicinae/api";
 import { performAutoType } from "./common/autotype";
-import { getEntryByPath, getEntryNames } from "./common/keepassxc";
+import { Database } from "./common/keepassxc";
 import { getDatabasePassword, storeDatabasePassword } from "./common/password";
 import { UnlockForm } from "./components/UnlockForm";
 
@@ -32,6 +31,7 @@ export default function () {
     const [isLoading, setIsLoading] = useState(true);
     const [isUnlocked, setIsUnlocked] = useState(true);
     const [entryNames, setEntryNames] = useState<string[]>([]);
+    const [database, setDatabase] = useState<Database | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -42,10 +42,9 @@ export default function () {
                 return;
             }
 
-            const names = await getEntryNames({
-                path: databasePath,
-                password,
-            });
+            const newDatabase = new Database(databasePath, password);
+            setDatabase(newDatabase);
+            const names = await newDatabase.getEntryNames();
 
             setEntryNames(names);
             setIsLoading(false);
@@ -67,17 +66,18 @@ export default function () {
 
     return (
         <List
-            isLoading={isLoading}
+            isLoading={isLoading || !database}
             searchBarPlaceholder="Search KeePassXC entries..."
         >
-            {entryNames.map((name, idx) => (
-                <ListItem
-                    idx={idx}
-                    name={name}
-                    databasePath={databasePath}
-                    keyDelay={keyDelay}
-                />
-            ))}
+            {database &&
+                entryNames.map((name, idx) => (
+                    <ListItem
+                        idx={idx}
+                        name={name}
+                        database={database}
+                        keyDelay={keyDelay}
+                    />
+                ))}
         </List>
     );
 }
@@ -85,12 +85,12 @@ export default function () {
 function ListItem({
     idx,
     name,
-    databasePath,
+    database,
     keyDelay,
 }: {
     idx: number;
     name: string;
-    databasePath: string;
+    database: Database;
     keyDelay: string;
 }) {
     return (
@@ -111,7 +111,7 @@ function ListItem({
                         icon={Icon.Keyboard}
                         onAction={() =>
                             performAutoType(
-                                databasePath,
+                                database,
                                 name,
                                 parseInt(keyDelay, 10),
                             )
@@ -122,10 +122,7 @@ function ListItem({
                         icon={Icon.CopyClipboard}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(
-                                    databasePath,
-                                    name,
-                                );
+                                const entry = await getEntry(database, name);
 
                                 if (entry.UserName) {
                                     await Clipboard.copy(entry.UserName);
@@ -138,10 +135,7 @@ function ListItem({
                         icon={Icon.CopyClipboard}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(
-                                    databasePath,
-                                    name,
-                                );
+                                const entry = await getEntry(database, name);
 
                                 if (entry.Password) {
                                     await Clipboard.copy(entry.Password, {
@@ -156,10 +150,7 @@ function ListItem({
                         icon={Icon.Window}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(
-                                    databasePath,
-                                    name,
-                                );
+                                const entry = await getEntry(database, name);
 
                                 if (entry.UserName) {
                                     closeMainWindow();
@@ -174,10 +165,7 @@ function ListItem({
                         icon={Icon.Key}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(
-                                    databasePath,
-                                    name,
-                                );
+                                const entry = await getEntry(database, name);
 
                                 if (entry.Password) {
                                     await closeMainWindow();
@@ -194,19 +182,10 @@ function ListItem({
 }
 
 async function getEntry(
-    databasePath: string,
+    database: Database,
     entryName: string,
 ): Promise<Record<string, string>> {
-    const password = await getDatabasePassword(databasePath);
-
-    if (!password) {
-        throw new Error("Database is locked.");
-    }
-
-    const entry = await getEntryByPath(
-        { path: databasePath, password },
-        entryName,
-    );
+    const entry = await database.getEntryByPath(entryName);
     if (!entry) {
         throw new Error(`Entry "${entryName}" not found in database.`);
     }

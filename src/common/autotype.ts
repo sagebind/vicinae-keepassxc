@@ -1,14 +1,14 @@
 import { setTimeout } from "node:timers/promises";
 import { closeMainWindow, showToast } from "@vicinae/api";
 import { type } from "./automation";
-import { getEntryByPath } from "./keepassxc";
+import type { Database } from "./keepassxc";
 
 export async function performAutoType(
-    databasePath: string,
+    database: Database,
     entryName: string,
     keyDelay: number,
 ) {
-    const entry = await getEntryByPath(databasePath, entryName);
+    const entry = await database.getEntryByPath(entryName);
 
     if (!entry) {
         return showToast({
