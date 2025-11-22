@@ -12,7 +12,7 @@ import {
     Clipboard,
 } from "@vicinae/api";
 import { performAutoType } from "./common/autotype";
-import { Database } from "./common/keepassxc";
+import { Database, Entry } from "./common/keepassxc";
 import { getDatabasePassword, storeDatabasePassword } from "./common/password";
 import { UnlockForm } from "./components/UnlockForm";
 
@@ -30,7 +30,6 @@ export default function () {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isUnlocked, setIsUnlocked] = useState(true);
-    const [entryNames, setEntryNames] = useState<string[]>([]);
     const [database, setDatabase] = useState<Database | null>(null);
 
     useEffect(() => {
@@ -43,10 +42,8 @@ export default function () {
             }
 
             const newDatabase = new Database(databasePath, password);
+            await newDatabase.refresh();
             setDatabase(newDatabase);
-            const names = await newDatabase.getEntryNames();
-
-            setEntryNames(names);
             setIsLoading(false);
         })();
     }, [databasePath, isUnlocked]);
@@ -69,40 +66,20 @@ export default function () {
             isLoading={isLoading || !database}
             searchBarPlaceholder="Search KeePassXC entries..."
         >
-            {database &&
-                entryNames.map((name, idx) => (
-                    <ListItem
-                        idx={idx}
-                        name={name}
-                        database={database}
-                        keyDelay={keyDelay}
-                    />
-                ))}
+            {database?.getAllEntries().map((entry) => (
+                <ListItem entry={entry} keyDelay={keyDelay} />
+            ))}
         </List>
     );
 }
 
-function ListItem({
-    idx,
-    name,
-    database,
-    keyDelay,
-}: {
-    idx: number;
-    name: string;
-    database: Database;
-    keyDelay: string;
-}) {
+function ListItem({ entry, keyDelay }: { entry: Entry; keyDelay: string }) {
     return (
         <List.Item
-            id={`${idx}:${name}`}
-            key={`${idx}:${name}`}
-            title={name.split("/").pop() || name}
-            subtitle={
-                name.lastIndexOf("/") > 0
-                    ? name.substring(0, name.lastIndexOf("/"))
-                    : undefined
-            }
+            id={entry.uuid}
+            key={entry.uuid}
+            title={entry.name}
+            subtitle={entry.groupPath}
             icon={Icon.Key}
             actions={
                 <ActionPanel>
@@ -110,11 +87,7 @@ function ListItem({
                         title="Auto-type"
                         icon={Icon.Keyboard}
                         onAction={() =>
-                            performAutoType(
-                                database,
-                                name,
-                                parseInt(keyDelay, 10),
-                            )
+                            performAutoType(entry, parseInt(keyDelay, 10))
                         }
                     />
                     <Action
@@ -122,10 +95,8 @@ function ListItem({
                         icon={Icon.CopyClipboard}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(database, name);
-
-                                if (entry.UserName) {
-                                    await Clipboard.copy(entry.UserName);
+                                if (entry.username) {
+                                    await Clipboard.copy(entry.username);
                                 }
                             })();
                         }}
@@ -135,10 +106,8 @@ function ListItem({
                         icon={Icon.CopyClipboard}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(database, name);
-
-                                if (entry.Password) {
-                                    await Clipboard.copy(entry.Password, {
+                                if (entry.password) {
+                                    await Clipboard.copy(entry.password, {
                                         concealed: true,
                                     });
                                 }
@@ -150,12 +119,10 @@ function ListItem({
                         icon={Icon.Window}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(database, name);
-
-                                if (entry.UserName) {
+                                if (entry.username) {
                                     closeMainWindow();
                                     await setTimeout(5000);
-                                    await Clipboard.paste(entry.UserName);
+                                    await Clipboard.paste(entry.username);
                                 }
                             })();
                         }}
@@ -165,12 +132,10 @@ function ListItem({
                         icon={Icon.Key}
                         onAction={() => {
                             (async () => {
-                                const entry = await getEntry(database, name);
-
-                                if (entry.Password) {
+                                if (entry.password) {
                                     await closeMainWindow();
                                     await setTimeout(5000);
-                                    await Clipboard.paste(entry.Password);
+                                    await Clipboard.paste(entry.password);
                                 }
                             })();
                         }}
@@ -179,15 +144,4 @@ function ListItem({
             }
         />
     );
-}
-
-async function getEntry(
-    database: Database,
-    entryName: string,
-): Promise<Record<string, string>> {
-    const entry = await database.getEntryByPath(entryName);
-    if (!entry) {
-        throw new Error(`Entry "${entryName}" not found in database.`);
-    }
-    return entry;
 }

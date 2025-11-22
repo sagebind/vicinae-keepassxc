@@ -52,6 +52,7 @@
   "dependencies": {
     "@types/which": "^3.0.4",
     "@vicinae/api": "^0.16.5",
+    "fast-xml-parser": "^5.3.2",
     "which": "^6.0.0"
   },
   "devDependencies": {

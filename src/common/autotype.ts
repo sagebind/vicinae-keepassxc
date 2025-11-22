@@ -1,39 +1,29 @@
 import { setTimeout } from "node:timers/promises";
-import { closeMainWindow, showToast } from "@vicinae/api";
-import { type } from "./automation";
-import { Database } from "./keepassxc";
+import { closeMainWindow } from "@vicinae/api";
+import { getVirtualKeyboard } from "./keyboard";
+import { Entry } from "./keepassxc";
 
-export async function performAutoType(
-    database: Database,
-    entryName: string,
-    keyDelay: number,
-) {
-    const entry = await database.getEntryByPath(entryName);
+const defaultSequence = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 
-    if (!entry) {
-        return showToast({
-            title: "Entry not found",
-            message: `Could not find entry "${entryName}" in the database.`,
-        });
-    }
-
+export async function performAutoType(entry: Entry, keyDelay: number) {
     const autoTypeString = generateAutoTypeString(entry);
 
     closeMainWindow();
 
     await setTimeout(1000);
-    await type(autoTypeString, keyDelay);
+    const keyboard = await getVirtualKeyboard();
+    await keyboard.type(autoTypeString, keyDelay);
 }
 
-function generateAutoTypeString(entry: Record<string, string>): string {
-    // If a custom attribute is set to override our auto-type sequence, use it.
-    if (entry.VicinaeAutoTypeSequence) {
-        return entry.VicinaeAutoTypeSequence.replace(/{TAB}/g, "\t")
-            .replace(/{ENTER}/g, "\n")
-            .replace(/{SPACE}/g, " ")
-            .replace(/{LEFTBRACE}/g, "{")
-            .replace(/{RIGHTBRACE}/g, "}");
-    }
+function generateAutoTypeString(entry: Entry): string {
+    const sequence = entry.autoType.sequence || defaultSequence;
 
-    return `${entry.UserName}\t${entry.Password}\n`;
+    return sequence
+        .replace(/{USERNAME}/g, entry.username || "")
+        .replace(/{PASSWORD}/g, entry.password)
+        .replace(/{TAB}/g, "\t")
+        .replace(/{ENTER}/g, "\n")
+        .replace(/{SPACE}/g, " ")
+        .replace(/{LEFTBRACE}/g, "{")
+        .replace(/{RIGHTBRACE}/g, "}");
 }

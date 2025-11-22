@@ -1,9 +1,23 @@
 import { spawn } from "node:child_process";
-import which from "which";
+import { XMLParser } from "fast-xml-parser";
+import { commandExists } from "./util";
 
-type Entry = Record<string, string>;
+export type Entry = {
+    uuid: string;
+    name: string;
+    groupPath: string;
+    username?: string;
+    password: string;
+    autoType: {
+        enabled: boolean;
+        sequence?: string;
+    };
+    attributes: Record<string, string>;
+};
 
 export class Database {
+    #xmlParser = new XMLParser();
+    #entries: Record<string, Entry> = {};
     #path: string;
     #password: string;
 
@@ -12,70 +26,69 @@ export class Database {
         this.#password = password;
     }
 
-    async getEntryNames(includeTrash: boolean = false): Promise<string[]> {
-        const output = await this.exec(
-            "ls",
-            "--quiet",
-            "--recursive",
-            this.#path,
-        );
-
-        const fullNames = [];
-        const groupStack: string[] = [];
-
-        for (const line of (output as string).split("\n")) {
-            const [, indentation, name, slash] =
-                /^(\s*)(.*?)(\/?)$/.exec(line) || [];
-            // Infer tree depth from indentation.
-            const depth = indentation.length / 2;
-
-            while (groupStack.length > depth) {
-                groupStack.pop();
-            }
-
-            if (name === "[empty]") {
-                // Skip empty entries.
-                continue;
-            } else if (slash) {
-                groupStack.push(name);
-            } else {
-                if (groupStack.length > 0) {
-                    if (includeTrash || groupStack[0] !== "Trash") {
-                        fullNames.push(groupStack.join("/") + "/" + name);
-                    }
-                } else {
-                    fullNames.push(name);
-                }
-            }
-        }
-
-        return fullNames;
+    getAllEntries(): Entry[] {
+        return Object.values(this.#entries);
     }
 
-    async getEntryByPath(entryPath: string): Promise<Entry | null> {
-        const output = await this.exec(
-            "show",
+    getByUuid(uuid: string): Entry | null {
+        return this.#entries[uuid] || null;
+    }
+
+    async refresh(): Promise<void> {
+        const xml = await this.exec(
+            "export",
             "--quiet",
-            "--all",
-            "--show-protected",
+            "--format",
+            "xml",
             this.#path,
-            entryPath,
         );
+        const json = this.#xmlParser.parse(xml);
+        this.#entries = {};
+        this.parseGroup(json.KeePassFile.Root.Group, []);
+    }
 
-        if (!output) {
-            return null;
-        }
+    private parseGroup(group: any, ancestors: string[]) {
+        const newAncestors = [...ancestors, group.Name];
 
-        const entry: Entry = {};
-
-        for (const line of (output as string).split("\n")) {
-            const [, key, value] = /^([^:]+):\s*(.*)$/.exec(line) || [];
-            if (key) {
-                entry[key] = value;
+        if (Array.isArray(group.Entry)) {
+            for (const entry of group.Entry) {
+                this.parseEntry(entry, newAncestors);
             }
+        } else if (group.Entry) {
+            this.parseEntry(group.Entry, newAncestors);
         }
 
-        return entry;
+        if (Array.isArray(group.Group)) {
+            for (const child of group.Group) {
+                this.parseGroup(child, newAncestors);
+            }
+        } else if (group.Group) {
+            this.parseGroup(group.Group, newAncestors);
+        }
+    }
+
+    private parseEntry(entry: any, ancestors: string[]) {
+        const uuid: string = entry.UUID;
+        const attributes: Record<string, string> = {};
+
+        for (const stringNode of entry.String) {
+            const key: string = stringNode.Key;
+            const value: string = stringNode.Value;
+            attributes[key] = value;
+        }
+
+        this.#entries[uuid] = {
+            uuid,
+            name: attributes.Title || "",
+            groupPath: ancestors.slice(1).join("/"),
+            username: attributes.UserName || "",
+            password: attributes.Password || "",
+            autoType: {
+                enabled: entry.AutoType?.Enabled === "True",
+                sequence: entry.AutoType?.DefaultSequence || "",
+            },
+            attributes,
+        };
     }
 
     private async exec(...args: string[]): Promise<string> {
@@ -122,8 +135,4 @@ async function getCliCommand(): Promise<string[]> {
     }
 
     throw new Error("Could not find KeePassXC CLI");
-}
-
-async function commandExists(command: string): Promise<boolean> {
-    return !!(await which(command, { nothrow: true }));
 }
