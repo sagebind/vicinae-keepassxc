@@ -12,9 +12,15 @@ export interface VirtualKeyboard {
 
 export async function getVirtualKeyboard(): Promise<VirtualKeyboard> {
     if (await commandExists("nc")) {
-        return new YdotoolClient(
-            "/run/user/1000/.ydotool_socket",
-        );
+        let socketPath = process.env.YDOTOOL_SOCKET;
+
+        // Mimic ydotool's logic for default socket location.
+        if (!socketPath) {
+            const socketDir = process.env.XDG_RUNTIME_DIR || "/tmp";
+            socketPath = `${socketDir}/.ydotool_socket`;
+        }
+
+        return new YdotoolClient(socketPath);
     }
 
     if (await commandExists("wtype")) {

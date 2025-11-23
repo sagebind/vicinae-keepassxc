@@ -120,10 +120,10 @@ export class YdotoolClient implements VirtualKeyboard {
     #netcatProcess: ChildProcessWithoutNullStreams;
     #eventBuffer = Buffer.alloc(24); // sizeof(input_event)
 
-    constructor(path: string) {
+    constructor(socketPath: string) {
         // Unfortunately, node does not support UNIX datagram sockets, but we can
         // use a netcat pipe to achieve the same result.
-        this.#netcatProcess = spawn("nc", ["-u", "--send-only", "-U", path]);
+        this.#netcatProcess = spawn("nc", ["-u", "--send-only", "-U", socketPath]);
     }
 
     async type(
