@@ -47,6 +47,17 @@ export class Database {
         this.parseGroup(json.KeePassFile.Root.Group, []);
     }
 
+    async getTotpCode(entry: Entry): Promise<string> {
+        const output = await this.exec(
+            "show",
+            "--quiet",
+            "--totp",
+            this.#path,
+            `${entry.groupPath}/${entry.name}`,
+        );
+        return output.trim();
+    }
+
     private parseGroup(group: any, ancestors: string[]) {
         const newAncestors = [...ancestors, group.Name];
 

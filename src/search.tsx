@@ -11,7 +11,7 @@ import {
     showToast,
     Clipboard,
 } from "@vicinae/api";
-import { performAutoType } from "./common/autotype";
+import { performAutoType } from "./common/autotype/autotype";
 import { Database, Entry } from "./common/keepassxc";
 import { getDatabasePassword, storeDatabasePassword } from "./common/password";
 import { UnlockForm } from "./components/UnlockForm";
@@ -67,13 +67,25 @@ export default function () {
             searchBarPlaceholder="Search KeePassXC entries..."
         >
             {database?.getAllEntries().map((entry) => (
-                <ListItem entry={entry} keyDelay={keyDelay} />
+                <ListItem
+                    database={database}
+                    entry={entry}
+                    keyDelay={keyDelay}
+                />
             ))}
         </List>
     );
 }
 
-function ListItem({ entry, keyDelay }: { entry: Entry; keyDelay: string }) {
+function ListItem({
+    database,
+    entry,
+    keyDelay,
+}: {
+    database: Database;
+    entry: Entry;
+    keyDelay: string;
+}) {
     return (
         <List.Item
             id={entry.uuid}
@@ -87,7 +99,11 @@ function ListItem({ entry, keyDelay }: { entry: Entry; keyDelay: string }) {
                         title="Auto-type"
                         icon={Icon.Keyboard}
                         onAction={() =>
-                            performAutoType(entry, parseInt(keyDelay, 10))
+                            performAutoType(
+                                database,
+                                entry,
+                                parseInt(keyDelay, 10),
+                            )
                         }
                     />
                     <Action
