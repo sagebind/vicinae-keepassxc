@@ -123,43 +123,17 @@ export class YdotoolClient implements VirtualKeyboard {
     constructor(socketPath: string) {
         // Unfortunately, node does not support UNIX datagram sockets, but we can
         // use a netcat pipe to achieve the same result.
-        this.#netcatProcess = spawn("nc", ["-u", "--send-only", "-U", socketPath]);
+        this.#netcatProcess = spawn("nc", [
+            "-u",
+            "--send-only",
+            "-U",
+            socketPath,
+        ]);
     }
 
-    async type(
-        tokens: AutoTypeToken[],
-        keyDelay: number,
-    ): Promise<void> {
+    async type(tokens: AutoTypeToken[], keyDelay: number): Promise<void> {
         for (const token of tokens) {
-            if (token.type === "text") {
-                for (const char of token.value) {
-                    const code = charMap[char];
-
-                    if (code) {
-                        await setTimeout(keyDelay);
-                        await this.sendKeyEvent(code, true);
-                        await setTimeout(keyDelay);
-                        await this.sendKeyEvent(code, false);
-                    } else {
-                        const baseChar = shiftTable[char];
-
-                        if (baseChar) {
-                            const code = charMap[baseChar];
-
-                            if (code) {
-                                await setTimeout(keyDelay);
-                                await this.sendKeyEvent(42, true);
-                                await setTimeout(keyDelay);
-                                await this.sendKeyEvent(code, true);
-                                await setTimeout(keyDelay);
-                                await this.sendKeyEvent(code, false);
-                                await setTimeout(keyDelay);
-                                await this.sendKeyEvent(42, false);
-                            }
-                        }
-                    }
-                }
-            }
+            await this.typeToken(token, keyDelay);
         }
     }
 
@@ -168,6 +142,103 @@ export class YdotoolClient implements VirtualKeyboard {
             this.#netcatProcess.kill();
             this.#netcatProcess.unref();
         });
+    }
+
+    private async typeToken(
+        token: AutoTypeToken,
+        keyDelay: number,
+    ): Promise<void> {
+        switch (token.type) {
+            case "delay":
+                await setTimeout(token.millis);
+                break;
+
+            case "set_delay":
+                keyDelay = token.millis;
+                break;
+
+            case "pgup":
+                await this.pressAndRelease(104, keyDelay);
+                break;
+
+            case "pgdn":
+                await this.pressAndRelease(109, keyDelay);
+                break;
+
+            case "backspace":
+                await this.pressAndRelease(14, keyDelay);
+                break;
+
+            case "esc":
+                await this.pressAndRelease(1, keyDelay);
+                break;
+
+            case "up":
+                await this.pressAndRelease(103, keyDelay);
+                break;
+
+            case "down":
+                await this.pressAndRelease(108, keyDelay);
+                break;
+
+            case "left":
+                await this.pressAndRelease(105, keyDelay);
+                break;
+
+            case "right":
+                await this.pressAndRelease(106, keyDelay);
+                break;
+
+            case "function":
+                if (token.number >= 1 && token.number <= 10) {
+                    await this.pressAndRelease(58 + token.number, keyDelay);
+                } else if (token.number === 11 || token.number === 12) {
+                    await this.pressAndRelease(87 - 11 + token.number, keyDelay);
+                } else if (token.number >= 13 && token.number <= 24) {
+                    await this.pressAndRelease(183 - 13 + token.number, keyDelay);
+                }
+                break;
+
+            case "text":
+                for (const char of token.value) {
+                    const code = charMap[char];
+
+                    if (code) {
+                        await this.pressAndRelease(code, keyDelay);
+                    } else {
+                        const baseChar = shiftTable[char];
+
+                        if (baseChar) {
+                            const code = charMap[baseChar];
+
+                            if (code) {
+                                await this.withModifier(42, async () => {
+                                    await this.pressAndRelease(code, keyDelay);
+                                });
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+    private async pressAndRelease(code: number, keyDelay: number) {
+        await setTimeout(keyDelay);
+        await this.sendKeyEvent(code, true);
+        await setTimeout(keyDelay);
+        await this.sendKeyEvent(code, false);
+    }
+
+    private async withModifier(
+        key: number,
+        fn: () => Promise<void>,
+    ): Promise<void> {
+        await this.sendKeyEvent(key, true);
+        await setTimeout(12);
+        await fn();
+        await setTimeout(12);
+        await this.sendKeyEvent(key, false);
+        await setTimeout(12);
     }
 
     private async sendKeyEvent(code: number, pressed: boolean): Promise<void> {
