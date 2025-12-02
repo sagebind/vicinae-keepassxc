@@ -2,60 +2,96 @@ import { spawn } from "node:child_process";
 import { XMLParser } from "fast-xml-parser";
 import { commandExists } from "./util";
 
-export type Entry = {
-    uuid: string;
-    name: string;
-    groupPath: string;
-    username?: string;
-    password: string;
-    autoType: {
-        enabled: boolean;
-        sequence?: string;
-    };
-    attributes: Record<string, string>;
-};
+export class Entry {
+    #xml: any;
+    #groupPath: string;
+    #handle: Handle;
 
-export class Database {
-    #xmlParser = new XMLParser();
-    #entries: Record<string, Entry> = {};
-    #path: string;
-    #password: string;
-
-    constructor(path: string, password: string) {
-        this.#path = path;
-        this.#password = password;
+    constructor(xml: any, groupPath: string, handle: Handle) {
+        this.#xml = xml;
+        this.#groupPath = groupPath;
+        this.#handle = handle;
     }
 
-    getAllEntries(): Entry[] {
-        return Object.values(this.#entries);
+    get uuid(): string {
+        return this.#xml.UUID;
+    }
+
+    get name(): string {
+        return this.getString("Title") || "";
+    }
+
+    get groupPath(): string {
+        return this.#groupPath;
+    }
+
+    get username(): string | null {
+        return this.getString("UserName");
+    }
+
+    get password(): string | null {
+        return this.getString("Password");
+    }
+
+    get hasTotp(): boolean {
+        return this.getString("TOTP Seed") !== null || this.getString("otp") !== null;
+    }
+
+    get autoTypeEnabled(): boolean {
+        return this.#xml.AutoType?.Enabled === "True";
+    }
+
+    get autoTypeSequence(): string | null {
+        return this.#xml.AutoType?.DefaultSequence || null;
+    }
+
+    getString(key: string): string | null {
+        return this.#xml.String?.find((element: any) => element.Key === key)?.Value || null;
+    }
+
+    async getTotpCode(): Promise<string> {
+        const output = await this.#handle.exec(
+            "show",
+            "--quiet",
+            "--totp",
+            this.#handle.path,
+            `${this.#groupPath}/${this.name}`,
+        );
+        console.log(output);
+        return output.trim();
+    }
+}
+
+export class Database {
+    #xmlParser = new XMLParser({
+        ignoreAttributes: true,
+    });
+    #entries: Map<string, Entry> = new Map();
+    #handle: Handle;
+
+    constructor(path: string, password: string) {
+        this.#handle = new Handle(path, password);
+    }
+
+    get entries(): Iterable<Entry> {
+        return this.#entries.values();
     }
 
     getByUuid(uuid: string): Entry | null {
-        return this.#entries[uuid] || null;
+        return this.#entries.get(uuid) || null;
     }
 
     async refresh(): Promise<void> {
-        const xml = await this.exec(
+        const xml = await this.#handle.exec(
             "export",
             "--quiet",
             "--format",
             "xml",
-            this.#path,
+            this.#handle.path,
         );
         const json = this.#xmlParser.parse(xml);
-        this.#entries = {};
+        this.#entries.clear();
         this.parseGroup(json.KeePassFile.Root.Group, []);
-    }
-
-    async getTotpCode(entry: Entry): Promise<string> {
-        const output = await this.exec(
-            "show",
-            "--quiet",
-            "--totp",
-            this.#path,
-            `${entry.groupPath}/${entry.name}`,
-        );
-        return output.trim();
     }
 
     private parseGroup(group: any, ancestors: string[]) {
@@ -79,30 +115,21 @@ export class Database {
     }
 
     private parseEntry(entry: any, ancestors: string[]) {
-        const uuid: string = entry.UUID;
-        const attributes: Record<string, string> = {};
+        const entryObject = new Entry(entry, ancestors.slice(1).join("/"), this.#handle);
+        this.#entries.set(entryObject.uuid, entryObject);
+    }
+}
 
-        for (const stringNode of entry.String) {
-            const key: string = stringNode.Key;
-            const value: string = stringNode.Value;
-            attributes[key] = value;
-        }
+class Handle {
+    path: string;
+    password: string;
 
-        this.#entries[uuid] = {
-            uuid,
-            name: attributes.Title || "",
-            groupPath: ancestors.slice(1).join("/"),
-            username: attributes.UserName || "",
-            password: attributes.Password || "",
-            autoType: {
-                enabled: entry.AutoType?.Enabled === "True",
-                sequence: entry.AutoType?.DefaultSequence || "",
-            },
-            attributes,
-        };
+    constructor(path: string, password: string) {
+        this.path = path;
+        this.password = password;
     }
 
-    private async exec(...args: string[]): Promise<string> {
+    async exec(...args: string[]): Promise<string> {
         const [cliCommand, ...cliArgs] = await getCliCommand();
 
         const child = spawn(cliCommand, [...cliArgs, ...args], {
@@ -111,7 +138,7 @@ export class Database {
 
         return await new Promise((resolve, reject) => {
             // Send password to CLI to unlock database.
-            child.stdin.write(this.#password);
+            child.stdin.write(this.password);
             child.stdin.end();
 
             let output = "";

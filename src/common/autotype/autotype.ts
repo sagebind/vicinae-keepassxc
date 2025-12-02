@@ -2,18 +2,14 @@ import { setTimeout } from "node:timers/promises";
 import { closeMainWindow } from "@vicinae/api";
 import { getVirtualKeyboard } from "./keyboard";
 import { type AutoTypeToken, parse } from "./parser";
-import type { Database, Entry } from "../keepassxc";
+import type { Entry } from "../keepassxc";
 
 const defaultSequence = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
 
-export async function performAutoType(
-    database: Database,
-    entry: Entry,
-    keyDelay: number,
-) {
-    const sequence = entry.autoType.sequence || defaultSequence;
+export async function performAutoType(entry: Entry, keyDelay: number) {
+    const sequence = entry.autoTypeSequence || defaultSequence;
     const tokens = await toArray(
-        expandEntryPlaceholders(database, entry, parse(sequence)),
+        expandEntryPlaceholders(entry, parse(sequence)),
     );
 
     closeMainWindow();
@@ -24,7 +20,6 @@ export async function performAutoType(
 }
 
 export async function* expandEntryPlaceholders(
-    database: Database,
     entry: Entry,
     tokens: Generator<AutoTypeToken>,
 ): AsyncGenerator<AutoTypeToken> {
@@ -35,18 +30,18 @@ export async function* expandEntryPlaceholders(
                 break;
 
             case "password":
-                yield { type: "text", value: entry.password };
+                yield { type: "text", value: entry.password || "" };
                 break;
 
             case "totp":
                 yield {
                     type: "text",
-                    value: await database.getTotpCode(entry),
+                    value: await entry.getTotpCode(),
                 };
                 break;
 
             case "attribute":
-                yield { type: "text", value: entry.attributes[token.key] };
+                yield { type: "text", value: entry.getString(token.key) || "" };
                 break;
 
             default:

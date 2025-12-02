@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
-import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 import type { VirtualKeyboard } from "./keyboard";
-import { AutoTypeToken } from "./parser";
+import type { AutoTypeToken } from "./parser";
 
 // Map of characters to Linux key codes. See
 // /usr/include/linux/input-event-codes.h

@@ -61,31 +61,21 @@ export default function () {
         );
     }
 
+    const entries = database ? Array.from(database.entries) : [];
+
     return (
         <List
             isLoading={isLoading || !database}
             searchBarPlaceholder="Search KeePassXC entries..."
         >
-            {database?.getAllEntries().map((entry) => (
-                <ListItem
-                    database={database}
-                    entry={entry}
-                    keyDelay={keyDelay}
-                />
+            {entries.map((entry) => (
+                <ListItem entry={entry} keyDelay={keyDelay} />
             ))}
         </List>
     );
 }
 
-function ListItem({
-    database,
-    entry,
-    keyDelay,
-}: {
-    database: Database;
-    entry: Entry;
-    keyDelay: string;
-}) {
+function ListItem({ entry, keyDelay }: { entry: Entry; keyDelay: string }) {
     return (
         <List.Item
             id={entry.uuid}
@@ -99,11 +89,7 @@ function ListItem({
                         title="Auto-type"
                         icon={Icon.Keyboard}
                         onAction={() =>
-                            performAutoType(
-                                database,
-                                entry,
-                                parseInt(keyDelay, 10),
-                            )
+                            performAutoType(entry, parseInt(keyDelay, 10))
                         }
                     />
                     <Action
@@ -130,32 +116,22 @@ function ListItem({
                             })();
                         }}
                     />
-                    <Action
-                        title="Paste username"
-                        icon={Icon.Window}
-                        onAction={() => {
-                            (async () => {
-                                if (entry.username) {
-                                    closeMainWindow();
-                                    await setTimeout(5000);
-                                    await Clipboard.paste(entry.username);
-                                }
-                            })();
-                        }}
-                    />
-                    <Action
-                        title="Paste password"
-                        icon={Icon.Key}
-                        onAction={() => {
-                            (async () => {
-                                if (entry.password) {
-                                    await closeMainWindow();
-                                    await setTimeout(5000);
-                                    await Clipboard.paste(entry.password);
-                                }
-                            })();
-                        }}
-                    />
+                    {entry.hasTotp && (
+                        <Action
+                            title="Copy TOTP"
+                            icon={Icon.CopyClipboard}
+                            onAction={() => {
+                                (async () => {
+                                    await Clipboard.copy(
+                                        await entry.getTotpCode(),
+                                        {
+                                            concealed: true,
+                                        },
+                                    );
+                                })();
+                            }}
+                        />
+                    )}
                 </ActionPanel>
             }
         />
